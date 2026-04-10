@@ -1,83 +1,84 @@
-Вот подробное техническое задание (ТЗ), структурированное для передачи Large Language Model (например, Claude 3.5 Sonnet, GPT-4o или Llama 3) для генерации кода. Оно разбито на логические блоки, чтобы LLM могла последовательно архитектурировать и писать приложение.
+# CLAUDE.md
 
----
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Техническое задание: Веб-приложение для обработки совещаний (Meeting Processor)
+## Project Overview
 
-## 1. Общее описание проекта
-Веб-приложение предназначено для автоматической обработки записей совещаний. Пользователь загружает видеофайл, аудиофайл или готовый текст. Приложение транскрибирует аудио/видео с разделением по ролям (Speaker Diarization), обрабатывает текст с помощью LLM по настраиваемому системному промпту и выдает структурированный результат (выжимка, список задач). Доступ к системе строго авторизован через корпоративный портал Bitrix24.
+Meeting Processor — a web application for automatic processing of meeting recordings. Users upload video, audio, or text. The app transcribes audio/video with speaker diarization, processes the transcript via LLM using a configurable system prompt, and outputs structured results (summary, task list, decisions). Access is authorized via Bitrix24 SSO (OAuth 2.0).
 
-## 2. Стек технологий (Рекомендуемый для генерации)
-*   **Frontend:** Vue3 (Vite) + TypeScript, Tailwind CSS (для UI), shadcn/ui (или аналогичные компоненты). Две темы: тёмная и светлая.
-*   **Backend:** Python (FastAPI), Celery + Redis (для очередей долгих задач).
-*   **База данных:** PostgreSQL (SQLAlchemy / Alembic для миграций).
-*   **Хранение файлов:** MinIO / S3-совместимое хранилище (или локальное хранилище для MVP).
-*   **Транскрибация:** OpenAI Whisper (модель `large-v3` или API) + pyannote-audio (для разделения по спикерам).
-*   **LLM обработка:** Интеграция с OpenAI API (или локальной моделью через Ollama/vLLM).
+## Tech Stack
 
-## 3. Архитектура и Роли пользователей
-*   **Роли:** Достаточно одной роли — Авторизованный пользователь. Проверка прав осуществляется только на этапе входа через Bitrix24.
-*   **Архитектурный паттерн:** Frontend общается с Backend через REST API. Долгие процессы (загрузка видео, транскрибация) выполняются асинхронно через Celery, статус обновляется через поллинг (или WebSocket в будущем).
+- **Frontend:** Vue 3 (Vite) + TypeScript, Tailwind CSS, shadcn-vue components. Dark/light theme support.
+- **Backend:** Python (FastAPI), Celery + Redis for async task queues.
+- **Database:** PostgreSQL with SQLAlchemy ORM and Alembic migrations.
+- **File Storage:** MinIO / S3-compatible (local storage for MVP).
+- **Transcription:** OpenAI Whisper (`large-v3`) + pyannote-audio (`pyannote/speaker-diarization-3.1`) for speaker diarization.
+- **LLM:** OpenAI API (or local model via Ollama/vLLM).
+- **System dependency:** `ffmpeg` for extracting audio from video files.
 
-## 4. Функциональные требования
+## Project Structure
 
-### 4.1. Авторизация (SSO через Bitrix24)
-1.  При переходе в приложение неавторизованный пользователь перенаправляется на страницу логина.
-2.  Кнопка "Войти через Bitrix24".
-3.  Реализация OAuth 2.0 через приложение Bitrix24.
-4.  При успешной авторизации создается сессия (JWT токен), пользователь перенаправляется в дашборд. Данные пользователя (имя, email, ID в Б24) сохраняются в БД.
-5.  Все API эндпоинты приложения (кроме `/auth/*`) защищены middleware проверки JWT.
+```
+frontend/          # Vue 3 + Vite + TypeScript app
+backend/           # FastAPI application
+  app/
+    api/           # REST API route handlers
+    models/        # SQLAlchemy models
+    schemas/       # Pydantic schemas
+    services/      # Business logic (transcription, LLM processing)
+    tasks/         # Celery task definitions
+    core/          # Config, security, dependencies
+  alembic/         # Database migrations
+```
 
-### 4.2. Загрузка данных (Input)
-Пользователь может выбрать один из трех вариантов ввода на главной странице:
-1.  **Аудио:** Принимаемые форматы `.mp3, .wav, .ogg, .m4a`. Максимальный размер — 500 МБ.
-2.  **Видео:** Принимаемые форматы `.mp4, .mkv, .webm`. Максимальный размер — 1 ГБ. (На бэкенде извлекается аудиодорожка через `ffmpeg`).
-3.  **Текст:** Поле ввода (textarea) или загрузка файла `.txt, .docx`.
+## Build & Run Commands
 
-### 4.3. Транскрибация (для аудио и видео)
-1.  Если загружен аудио/видео файл, запускатся асинхронная задача:
-    *   Извлечение аудио (если видео).
-    *   Транскрибация с помощью Whisper.
-    *   **Диаризация (Разделение по ролям):** Использование алгоритма Speaker Diarization (например, `pyannote/speaker-diarization-3.1`). Результат должен быть в формате: `[Спикер 1]: Текст... \n [Спикер 2]: Текст...`.
-2.  Пользователь должен видеть статус обработки: "Загрузка" -> "Транскрибация" -> "Анализ" -> "Готово".
+### Backend
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload              # Dev server
+celery -A app.tasks.worker worker --loglevel=info  # Celery worker
+alembic upgrade head                        # Run migrations
+alembic revision --autogenerate -m "msg"    # Create migration
+```
 
-### 4.4. Обработка текста и LLM
-1.  После получения транскрипта (или если на входе был сразу текст), он отправляется в LLM.
-2.  Промпт для LLM берется из окна "Системный промпт" (см. 4.5).
-3.  Результат LLM должен быть строго структурированным (использовать JSON Mode или Function Calling у LLM).
-    *   **Ожидаемые поля вывода:**
-        *   `summary` (Краткая выжимка совещания).
-        *   `tasks` (Массив задач: задача, постановщик, ответственный (если определен), дедлайн).
-        *   `decisions` (Принятые решения).
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev          # Dev server
+npm run build        # Production build
+npm run lint         # Lint
+npm run type-check   # TypeScript check
+```
 
-### 4.5. Окно системного промпта
-1.  В интерфейсе (в сайдбаре или настройках) есть поле "Системный промпт".
-2.  По умолчанию в него подставляется дефолтный промпт (например: *"Ты бизнес-ассистент. Проанализируй транскрипт совещания. Выдели краткую выжимку, список принятых решений и список задач с ответственными..."*).
-3.  Пользователь может отредактировать промпт и сохранить его.
-4.  Сохраненный промпт привязывается к пользователю в БД и используется по умолчанию для всех его новых обработок.
-5.  Возле поля промпта должна быть кнопка "Сбросить до системного", чтобы вернуть дефолтное значение.
+## Architecture
 
-### 4.6. Вывод результатов
-1.  Отображение результата в удобочитаемом виде:
-    *   Таб "Выжимка и решения" (Markdown рендеринг).
-    *   Таб "Задачи" (Таблица с колонками: Задача, Ответственный, Срок).
-2.  Исходный транскрипт (если был) должен быть доступен в раскрывающемся блоке "Исходный текст" для сверки.
-3.  Кнопки экспорта: "Скопировать", "Скачать .txt", "Скачать .json".
+- Frontend communicates with Backend via REST API. All endpoints except `/auth/*` require JWT authentication.
+- Long-running tasks (transcription, LLM processing) run asynchronously via Celery workers. The frontend polls task status every 5 seconds.
+- Processing pipeline: Upload -> Extract audio (if video, via ffmpeg) -> Whisper transcription -> pyannote speaker diarization -> LLM analysis -> Structured JSON result.
+- Meeting status flow: `pending` -> `transcribing` -> `processing` -> `done` | `failed`.
 
-## 5. Нефункциональные требования
-1.  **Безопасность:** Файлы пользователей изолированы. Пользователь видит только свои транскрипции и задачи (RLS на уровне API).
-2.  **Асинхронность:** Процесс транскрибации может занимать 10-15 минут. Интерфейс не должен блокироваться. Использовать поллинг статуса задачи каждые 5 секунд.
-3.  **Обработка ошибок:** Если транскрибация не удалась (плохое аудио) или LLM вернула ошибку, показывать пользователю понятное уведомление (Toast).
+## Database Schema
 
-## 6. Схема базы данных (Основные сущности)
-*   **User:** `id`, `bitrix24_id`, `email`, `name`, `system_prompt` (text), `created_at`.
-*   **Meeting:** `id`, `user_id` (FK), `title`, `input_type` (audio/video/text), `original_file_url`, `transcript` (text), `result_json` (jsonb), `status` (pending/transcribing/processing/done/failed), `created_at`.
+- **User:** `id`, `bitrix24_id`, `email`, `name`, `system_prompt` (text), `created_at`
+- **Meeting:** `id`, `user_id` (FK), `title`, `input_type` (audio/video/text), `original_file_url`, `transcript` (text), `result_json` (jsonb), `status` (pending/transcribing/processing/done/failed), `created_at`
 
----
+All queries must be scoped to the authenticated user (row-level security at API layer).
 
-### 💡 Инструкция для LLM по генерации кода:
-1.  Начни с создания структуры проекта (директории для `frontend` и `backend`).
-2.  Сначала сгенерируй Backend: настрой FastAPI, создай модели БД (SQLAlchemy), реализуй эндпоинты для авторизации (заглушки для Bitrix24 OAuth) и API для встреч.
-3.  Реализуй Celery worker для обработки аудио (интеграция Whisper + pyannote) и вызова LLM.
-4.  Затем сгенерируй Frontend: настрой React-приложение, реализуй стилизованные компоненты (формы загрузки, дашборд, текстовое поле для промпта, вывод результатов).
-5.  Напиши подробные комментарии к коду, объясняющие, как интегрировать реальный Bitrix24 OAuth и где вставить ключи API для LLM и Whisper.
+## LLM Output Structure
+
+The LLM must return structured JSON with these fields:
+- `summary` — meeting summary
+- `tasks` — array of objects: task description, assigner, assignee (if identified), deadline
+- `decisions` — list of decisions made
+
+Use JSON Mode or Function Calling to enforce structure.
+
+## Key Constraints
+
+- File size limits: audio 500 MB, video 1 GB.
+- Accepted audio formats: `.mp3, .wav, .ogg, .m4a`. Video: `.mp4, .mkv, .webm`. Text: `.txt, .docx`.
+- Each user has a customizable system prompt stored in the DB, with a "reset to default" option.
+- The language of the UI and prompts is Russian.
