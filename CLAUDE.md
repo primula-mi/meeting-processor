@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Meeting Processor — a web application for automatic processing of meeting recordings. Users upload video, audio, or text. The app transcribes audio/video with speaker diarization, processes the transcript via LLM using a configurable system prompt, and outputs structured results (summary, task list, decisions). Access is authorized via Bitrix24 SSO (OAuth 2.0).
+Meeting Processor — a web application for automatic processing of meeting recordings. Users upload video, audio, or text. The app transcribes audio/video with speaker diarization, processes the transcript via LLM using a configurable system prompt, and outputs structured results (summary, task list, decisions).
+
+**Authentication:** Two OAuth providers are implemented. **Yandex** (primary) is the default login shown in the UI and is restricted to a whitelist of corporate email domains via `ALLOWED_EMAIL_DOMAINS`. **Bitrix24** SSO is fully implemented on the backend but hidden in the UI via a `BITRIX24_ENABLED` flag in `frontend/src/pages/LoginPage.vue` — it can be enabled when a paid Bitrix24 plan is available. The `User` model stores both `yandex_id` and `bitrix24_id` (both nullable); each user is created with exactly one of them depending on the provider used.
 
 ## Tech Stack
 
@@ -62,7 +64,7 @@ npm run type-check   # TypeScript check
 
 ## Database Schema
 
-- **User:** `id`, `bitrix24_id`, `email`, `name`, `system_prompt` (text), `created_at`
+- **User:** `id`, `yandex_id` (nullable), `bitrix24_id` (nullable), `email`, `name`, `system_prompt` (text), `created_at`
 - **Meeting:** `id`, `user_id` (FK), `title`, `input_type` (audio/video/text), `original_file_url`, `transcript` (text), `result_json` (jsonb), `status` (pending/transcribing/processing/done/failed), `created_at`
 
 All queries must be scoped to the authenticated user (row-level security at API layer).

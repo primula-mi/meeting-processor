@@ -10,42 +10,39 @@ const auth = useAuthStore()
 const loading = ref(false)
 const error = ref('')
 
-async function loginWithBitrix24() {
+// Toggle this to show the Bitrix24 login button once a paid Bitrix24 plan is
+// available and BITRIX24_* env vars are configured on the backend.
+const BITRIX24_ENABLED = false
+
+async function loginWith(provider: 'yandex' | 'bitrix24') {
   loading.value = true
   error.value = ''
   try {
-    const { data } = await api.get('/auth/login')
+    const { data } = await api.get(`/auth/${provider}/login`)
     window.location.href = data.url
-  } catch (e) {
-    error.value = 'Не удалось получить ссылку для входа'
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    error.value = err.response?.data?.detail || 'Не удалось получить ссылку для входа'
     loading.value = false
   }
 }
 
 onMounted(async () => {
-  // Handle OAuth callback: ?code=... or ?access_token=...
-  const code = route.query.code as string | undefined
+  // Backend redirects here after OAuth with ?access_token=... or ?error=...
   const token = route.query.access_token as string | undefined
+  const errMsg = route.query.error as string | undefined
+
+  if (errMsg) {
+    error.value = errMsg
+    // Clean the URL
+    router.replace({ name: 'login' })
+    return
+  }
 
   if (token) {
     auth.setToken(token)
     await auth.fetchUser()
     router.replace('/')
-    return
-  }
-
-  if (code) {
-    loading.value = true
-    try {
-      const { data } = await api.get('/auth/callback', { params: { code } })
-      auth.setToken(data.access_token)
-      await auth.fetchUser()
-      router.replace('/')
-    } catch {
-      error.value = 'Ошибка авторизации'
-    } finally {
-      loading.value = false
-    }
     return
   }
 
@@ -64,14 +61,31 @@ onMounted(async () => {
       <p class="mb-6 text-sm text-muted-foreground">
         Автоматическая обработка записей совещаний
       </p>
+
       <button
-        @click="loginWithBitrix24"
+        @click="loginWith('yandex')"
         :disabled="loading"
         class="w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-colors"
       >
-        {{ loading ? 'Загрузка…' : 'Войти через Bitrix24' }}
+        {{ loading ? 'Загрузка…' : 'Войти через Яндекс' }}
       </button>
-      <p v-if="error" class="mt-4 text-sm text-destructive">{{ error }}</p>
+
+      <button
+        v-if="BITRIX24_ENABLED"
+        @click="loginWith('bitrix24')"
+        :disabled="loading"
+        class="mt-2 w-full rounded-md border border-border px-4 py-2.5 text-sm font-medium hover:bg-accent disabled:opacity-60 transition-colors"
+      >
+        Войти через Bitrix24
+      </button>
+
+      <p class="mt-3 text-center text-xs text-muted-foreground">
+        Доступ только для сотрудников компании
+      </p>
+
+      <p v-if="error" class="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+        {{ error }}
+      </p>
     </div>
   </div>
 </template>

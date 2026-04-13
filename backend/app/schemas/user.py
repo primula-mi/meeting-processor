@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 class UserRead(BaseModel):
     id: int
-    bitrix24_id: str
+    yandex_id: str | None
+    bitrix24_id: str | None
     email: str | None
     name: str | None
     system_prompt: str

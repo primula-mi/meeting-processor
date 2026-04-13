@@ -2,7 +2,8 @@ import api from './client'
 
 export interface User {
   id: number
-  bitrix24_id: string
+  yandex_id: string | null
+  bitrix24_id: string | null
   email: string | null
   name: string | null
   system_prompt: string
