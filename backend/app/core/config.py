@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
 
+    # Ollama
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_DEFAULT_MODEL: str = "llama3"
+
+    # Default LLM provider: "openai" or "ollama"
+    LLM_PROVIDER: str = "openai"
+
     # File storage
     UPLOAD_DIR: str = "uploads"
     MAX_AUDIO_SIZE_MB: int = 500

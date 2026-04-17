@@ -10,6 +10,8 @@ class UserRead(BaseModel):
     email: str | None
     name: str | None
     system_prompt: str
+    llm_provider: str | None
+    llm_model: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -17,3 +19,8 @@ class UserRead(BaseModel):
 
 class SystemPromptUpdate(BaseModel):
     system_prompt: str
+
+
+class LLMSettingsUpdate(BaseModel):
+    llm_provider: str
+    llm_model: str

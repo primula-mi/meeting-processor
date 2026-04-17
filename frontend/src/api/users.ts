@@ -7,7 +7,25 @@ export interface User {
   email: string | null
   name: string | null
   system_prompt: string
+  llm_provider: string | null
+  llm_model: string | null
   created_at: string
+}
+
+export interface ModelInfo {
+  id: string
+  name: string
+}
+
+export interface ProviderInfo {
+  name: string
+  models: ModelInfo[]
+  available?: boolean
+}
+
+export interface AvailableModels {
+  default_provider: string
+  providers: Record<string, ProviderInfo>
 }
 
 export async function getMe(): Promise<User> {
@@ -22,5 +40,15 @@ export async function updateSystemPrompt(system_prompt: string): Promise<User> {
 
 export async function resetSystemPrompt(): Promise<User> {
   const { data } = await api.post('/users/me/system-prompt/reset')
+  return data
+}
+
+export async function updateLLMSettings(llm_provider: string, llm_model: string): Promise<User> {
+  const { data } = await api.put('/users/me/llm-settings', { llm_provider, llm_model })
+  return data
+}
+
+export async function getAvailableModels(): Promise<AvailableModels> {
+  const { data } = await api.get('/users/me/available-models')
   return data
 }

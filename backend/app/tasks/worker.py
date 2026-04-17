@@ -75,7 +75,12 @@ def process_meeting_task(self, meeting_id: int):
             meeting.status = MeetingStatus.PROCESSING
             db.commit()
 
-            result = process_transcript(meeting.transcript, user.system_prompt)
+            result = process_transcript(
+                meeting.transcript,
+                user.system_prompt,
+                provider=user.llm_provider,
+                model=user.llm_model,
+            )
             meeting.result_json = result
             meeting.status = MeetingStatus.DONE
             db.commit()
