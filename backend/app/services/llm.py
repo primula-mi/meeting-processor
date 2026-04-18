@@ -47,14 +47,47 @@ def process_transcript(
         kwargs["response_format"] = {"type": "json_object"}
 
     response = client.chat.completions.create(**kwargs)
-    content = response.choices[0].message.content
+    content = (response.choices[0].message.content or "").strip()
 
-    result = json.loads(content)
+    result = _parse_json_response(content)
     result.setdefault("summary", "")
     result.setdefault("tasks", [])
     result.setdefault("decisions", [])
 
     return result
+
+
+def _parse_json_response(content: str) -> dict:
+    """Extract JSON from LLM response, handling markdown fences and extra text."""
+    if not content:
+        return {}
+
+    # Try direct parse first
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting from ```json ... ``` fences
+    import re
+    m = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", content)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Try finding first { ... last }
+    start = content.find("{")
+    end = content.rfind("}")
+    if start != -1 and end > start:
+        try:
+            return json.loads(content[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    logger.warning("Could not parse JSON from LLM response: %s", content[:200])
+    return {"summary": content}
 
 
 def list_ollama_models() -> list[dict]:
