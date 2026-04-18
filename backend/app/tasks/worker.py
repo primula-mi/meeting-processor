@@ -25,6 +25,7 @@ celery_app.conf.update(
 def process_meeting_task(self, meeting_id: int):
     """Main async task: transcribe (if needed) and process via LLM."""
     from app.core.database import SessionLocal
+    from app.models.user import User  # noqa: F401
     from app.models.meeting import Meeting, MeetingStatus, InputType
     from app.services.transcription import (
         extract_audio_from_video,
