@@ -112,26 +112,74 @@ def _transcribe_openai(audio_path: str) -> str:
 
 
 def _transcribe_assemblyai(audio_path: str) -> str:
-    """Transcribe via AssemblyAI with built-in speaker diarization."""
-    import assemblyai as aai
+    """Transcribe via AssemblyAI with built-in speaker diarization.
 
-    aai.settings.api_key = settings.ASSEMBLYAI_API_KEY
-    aai.settings.http_timeout = 300.0
+    Uses direct HTTP calls: upload file, submit job, poll until complete.
+    """
+    import time
+    import httpx
 
-    config = aai.TranscriptionConfig(speaker_labels=True, language_code="ru")
-    transcriber = aai.Transcriber()
-    transcript = transcriber.transcribe(audio_path, config=config)
+    api_key = settings.ASSEMBLYAI_API_KEY
+    if not api_key:
+        raise RuntimeError("ASSEMBLYAI_API_KEY is not set")
 
-    if transcript.status == aai.TranscriptStatus.error:
-        raise RuntimeError(f"AssemblyAI error: {transcript.error}")
+    base_url = "https://api.assemblyai.com/v2"
+    headers = {"authorization": api_key}
 
-    if transcript.utterances:
+    # Step 1: Upload the audio file
+    logger.info("AssemblyAI: uploading %s", audio_path)
+    with open(audio_path, "rb") as f:
+        upload_resp = httpx.post(
+            f"{base_url}/upload",
+            headers=headers,
+            content=f,
+            timeout=600.0,
+        )
+    upload_resp.raise_for_status()
+    audio_url = upload_resp.json()["upload_url"]
+    logger.info("AssemblyAI: file uploaded, url=%s", audio_url[:80])
+
+    # Step 2: Submit transcription job
+    submit_resp = httpx.post(
+        f"{base_url}/transcript",
+        headers=headers,
+        json={
+            "audio_url": audio_url,
+            "speaker_labels": True,
+            "language_code": "ru",
+        },
+        timeout=30.0,
+    )
+    submit_resp.raise_for_status()
+    transcript_id = submit_resp.json()["id"]
+    logger.info("AssemblyAI: job submitted, id=%s", transcript_id)
+
+    # Step 3: Poll for completion
+    poll_url = f"{base_url}/transcript/{transcript_id}"
+    while True:
+        poll_resp = httpx.get(poll_url, headers=headers, timeout=30.0)
+        poll_resp.raise_for_status()
+        data = poll_resp.json()
+        status = data["status"]
+
+        if status == "completed":
+            logger.info("AssemblyAI: transcription completed")
+            break
+        if status == "error":
+            raise RuntimeError(f"AssemblyAI error: {data.get('error', 'unknown')}")
+
+        logger.debug("AssemblyAI: status=%s, waiting...", status)
+        time.sleep(5)
+
+    # Step 4: Format result with speaker labels
+    utterances = data.get("utterances")
+    if utterances:
         lines: list[str] = []
-        for u in transcript.utterances:
-            lines.append(f"[Speaker {u.speaker}]: {u.text}")
+        for u in utterances:
+            lines.append(f"[Speaker {u['speaker']}]: {u['text']}")
         return "\n".join(lines)
 
-    return transcript.text or ""
+    return data.get("text", "")
 
 
 # ---------------------------------------------------------------------------
