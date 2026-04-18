@@ -116,6 +116,7 @@ def _transcribe_assemblyai(audio_path: str) -> str:
     import assemblyai as aai
 
     aai.settings.api_key = settings.ASSEMBLYAI_API_KEY
+    aai.settings.http_timeout = 300.0
 
     config = aai.TranscriptionConfig(speaker_labels=True, language_code="ru")
     transcriber = aai.Transcriber()
