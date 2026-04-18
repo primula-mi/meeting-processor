@@ -6,9 +6,12 @@ import {
   resetSystemPrompt,
   updateLLMSettings,
   getAvailableModels,
+  updateTranscriptionSettings,
+  getAvailableTranscriptionProviders,
   type AvailableModels,
+  type AvailableTranscriptionProviders,
 } from '@/api/users'
-import { RotateCcw, Save, Bot, Cpu } from 'lucide-vue-next'
+import { RotateCcw, Save, Bot, Cpu, Mic } from 'lucide-vue-next'
 
 const auth = useAuthStore()
 
@@ -24,6 +27,12 @@ const selectedModel = ref('')
 const savingLLM = ref(false)
 const savedLLM = ref(false)
 
+// Transcription settings
+const transcriptionProviders = ref<AvailableTranscriptionProviders | null>(null)
+const selectedTranscription = ref('')
+const savingTranscription = ref(false)
+const savedTranscription = ref(false)
+
 const currentProviderModels = computed(() => {
   if (!availableModels.value || !selectedProvider.value) return []
   return availableModels.value.providers[selectedProvider.value]?.models || []
@@ -32,6 +41,11 @@ const currentProviderModels = computed(() => {
 const providerEntries = computed(() => {
   if (!availableModels.value) return []
   return Object.entries(availableModels.value.providers)
+})
+
+const selectedTranscriptionInfo = computed(() => {
+  if (!transcriptionProviders.value) return null
+  return transcriptionProviders.value.providers.find((p) => p.id === selectedTranscription.value)
 })
 
 watch(selectedProvider, () => {
@@ -47,6 +61,7 @@ onMounted(async () => {
     prompt.value = auth.user.system_prompt
   }
 
+  // Load LLM models
   try {
     availableModels.value = await getAvailableModels()
     if (auth.user) {
@@ -58,7 +73,18 @@ onMounted(async () => {
       selectedModel.value = currentProviderModels.value[0].id
     }
   } catch {
-    // Models endpoint unavailable — LLM settings won't be shown
+    // LLM models endpoint unavailable
+  }
+
+  // Load transcription providers
+  try {
+    transcriptionProviders.value = await getAvailableTranscriptionProviders()
+    if (auth.user) {
+      selectedTranscription.value =
+        auth.user.transcription_provider || transcriptionProviders.value.default_provider
+    }
+  } catch {
+    // Transcription providers endpoint unavailable
   }
 })
 
@@ -69,9 +95,7 @@ async function savePrompt() {
     const user = await updateSystemPrompt(prompt.value)
     auth.user = user
     savedPrompt.value = true
-    setTimeout(() => {
-      savedPrompt.value = false
-    }, 2000)
+    setTimeout(() => { savedPrompt.value = false }, 2000)
   } finally {
     savingPrompt.value = false
   }
@@ -96,11 +120,22 @@ async function saveLLMSettings() {
     const user = await updateLLMSettings(selectedProvider.value, selectedModel.value)
     auth.user = user
     savedLLM.value = true
-    setTimeout(() => {
-      savedLLM.value = false
-    }, 2000)
+    setTimeout(() => { savedLLM.value = false }, 2000)
   } finally {
     savingLLM.value = false
+  }
+}
+
+async function saveTranscriptionSettings() {
+  savingTranscription.value = true
+  savedTranscription.value = false
+  try {
+    const user = await updateTranscriptionSettings(selectedTranscription.value)
+    auth.user = user
+    savedTranscription.value = true
+    setTimeout(() => { savedTranscription.value = false }, 2000)
+  } finally {
+    savingTranscription.value = false
   }
 }
 </script>
@@ -178,6 +213,67 @@ async function saveLLMSettings() {
         >
           <Save class="h-4 w-4" />
           {{ savingLLM ? 'Сохранение…' : 'Сохранить' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Transcription Provider -->
+    <div v-if="transcriptionProviders" class="mb-6 rounded-lg border border-border bg-card p-6">
+      <h2 class="mb-1 flex items-center gap-2 text-lg font-semibold">
+        <Mic class="h-5 w-5" />
+        Транскрибация
+      </h2>
+      <p class="mb-4 text-sm text-muted-foreground">
+        Выберите сервис для расшифровки аудио- и видеозаписей.
+      </p>
+
+      <div class="grid gap-3 sm:grid-cols-3">
+        <button
+          v-for="p in transcriptionProviders.providers"
+          :key="p.id"
+          @click="selectedTranscription = p.id"
+          :disabled="!p.available"
+          class="rounded-md border p-4 text-left transition-colors"
+          :class="[
+            selectedTranscription === p.id
+              ? 'border-primary bg-primary/5 ring-1 ring-primary'
+              : p.available
+                ? 'border-border hover:bg-accent'
+                : 'border-border opacity-50 cursor-not-allowed',
+          ]"
+        >
+          <div class="mb-1 text-sm font-medium">{{ p.name }}</div>
+          <div class="text-xs text-muted-foreground">{{ p.description }}</div>
+          <div class="mt-2 flex items-center gap-2">
+            <span
+              v-if="p.has_diarization"
+              class="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            >
+              спикеры
+            </span>
+            <span
+              v-if="!p.available"
+              class="inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+            >
+              не настроен
+            </span>
+          </div>
+        </button>
+      </div>
+
+      <p v-if="selectedTranscriptionInfo && !selectedTranscriptionInfo.has_diarization" class="mt-3 text-xs text-muted-foreground">
+        Выбранный провайдер не поддерживает разделение по спикерам — транскрипт будет без ролей.
+      </p>
+
+      <div class="mt-4 flex items-center justify-end gap-3">
+        <span v-if="savedTranscription" class="text-sm text-green-600 dark:text-green-500">Сохранено</span>
+        <button
+          @click="saveTranscriptionSettings"
+          :disabled="savingTranscription"
+          class="flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-colors"
+        >
+          <Save class="h-4 w-4" />
+          {{ savingTranscription ? 'Сохранение…' : 'Сохранить' }}
         </button>
       </div>
     </div>

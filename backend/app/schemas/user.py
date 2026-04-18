@@ -12,6 +12,7 @@ class UserRead(BaseModel):
     system_prompt: str
     llm_provider: str | None
     llm_model: str | None
+    transcription_provider: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -24,3 +25,7 @@ class SystemPromptUpdate(BaseModel):
 class LLMSettingsUpdate(BaseModel):
     llm_provider: str
     llm_model: str
+
+
+class TranscriptionSettingsUpdate(BaseModel):
+    transcription_provider: str

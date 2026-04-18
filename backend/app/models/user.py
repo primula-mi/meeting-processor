@@ -33,6 +33,7 @@ class User(Base):
     system_prompt: Mapped[str] = mapped_column(Text, default=DEFAULT_SYSTEM_PROMPT)
     llm_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     llm_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    transcription_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

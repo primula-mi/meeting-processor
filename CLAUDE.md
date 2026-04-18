@@ -14,8 +14,8 @@ Meeting Processor — a web application for automatic processing of meeting reco
 - **Backend:** Python (FastAPI), Celery + Redis for async task queues.
 - **Database:** PostgreSQL with SQLAlchemy ORM and Alembic migrations.
 - **File Storage:** MinIO / S3-compatible (local storage for MVP).
-- **Transcription:** OpenAI Whisper (`large-v3`) + pyannote-audio (`pyannote/speaker-diarization-3.1`) for speaker diarization.
-- **LLM:** OpenAI API (or local model via Ollama/vLLM).
+- **Transcription:** Three providers selectable per-user: `local` (OpenAI Whisper `large-v3` + pyannote-audio speaker diarization, requires GPU), `openai` (Whisper API, cloud, no diarization), `assemblyai` (cloud with built-in speaker diarization). Default set via `TRANSCRIPTION_PROVIDER` env var.
+- **LLM:** Two providers selectable per-user: `openai` (OpenAI API) or `ollama` (local LLM server). Default set via `LLM_PROVIDER` env var. Users can switch providers and models from the Settings page.
 - **System dependency:** `ffmpeg` for extracting audio from video files.
 
 ## Project Structure

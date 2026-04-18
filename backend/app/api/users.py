@@ -5,7 +5,12 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.user import DEFAULT_SYSTEM_PROMPT, User
-from app.schemas.user import LLMSettingsUpdate, SystemPromptUpdate, UserRead
+from app.schemas.user import (
+    LLMSettingsUpdate,
+    SystemPromptUpdate,
+    TranscriptionSettingsUpdate,
+    UserRead,
+)
 from app.services.llm import list_ollama_models
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -80,4 +85,56 @@ def get_available_models():
                 "available": len(ollama_models) > 0,
             },
         },
+    }
+
+
+@router.put("/me/transcription-settings", response_model=UserRead)
+def update_transcription_settings(
+    body: TranscriptionSettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update the user's transcription provider."""
+    current_user.transcription_provider = body.transcription_provider
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.get("/me/available-transcription-providers")
+def get_available_transcription_providers():
+    """Return available transcription providers with their status."""
+
+    def _local_available() -> bool:
+        try:
+            import whisper  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    return {
+        "default_provider": settings.TRANSCRIPTION_PROVIDER,
+        "providers": [
+            {
+                "id": "local",
+                "name": "Локальный Whisper",
+                "description": "Whisper + pyannote (требует GPU и установленных зависимостей)",
+                "available": _local_available(),
+                "has_diarization": True,
+            },
+            {
+                "id": "openai",
+                "name": "OpenAI Whisper API",
+                "description": "Облачная транскрибация, до 25 МБ на файл, без разделения по спикерам",
+                "available": bool(settings.OPENAI_API_KEY),
+                "has_diarization": False,
+            },
+            {
+                "id": "assemblyai",
+                "name": "AssemblyAI",
+                "description": "Облачная транскрибация с разделением по спикерам",
+                "available": bool(settings.ASSEMBLYAI_API_KEY),
+                "has_diarization": True,
+            },
+        ],
     }

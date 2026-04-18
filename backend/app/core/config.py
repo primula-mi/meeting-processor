@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # Whisper
     WHISPER_MODEL: str = "large-v3"
 
+    # Transcription provider: "local" (Whisper+pyannote), "openai" (Whisper API), "assemblyai"
+    TRANSCRIPTION_PROVIDER: str = "local"
+    ASSEMBLYAI_API_KEY: str = ""
+
     # Frontend URL
     FRONTEND_URL: str = "http://localhost:5173"
 

@@ -29,7 +29,7 @@ def process_meeting_task(self, meeting_id: int):
     from app.services.transcription import (
         extract_audio_from_video,
         read_text_file,
-        transcribe_with_diarization,
+        transcribe,
     )
     from app.services.llm import process_transcript
 
@@ -54,8 +54,8 @@ def process_meeting_task(self, meeting_id: int):
                 if meeting.input_type == InputType.VIDEO:
                     audio_path = extract_audio_from_video(file_path)
 
-                transcript = transcribe_with_diarization(
-                    audio_path, model_name=settings.WHISPER_MODEL
+                transcript = transcribe(
+                    audio_path, provider=user.transcription_provider
                 )
 
                 # Clean up temp audio from video extraction
